@@ -48,12 +48,11 @@ if not login_json["status"] == 1:
     exit(2)
 
 print("Login ok.")
-#print(login_request.status_code)
-#print(login_request.text)
+
 secret = login_json["secret"]
 credentials.update({"secret": secret})
 with open(CREDENTIALS_FILENAME, "w") as credentials_file:
-    credentials = json.dump(credentials_file)
+    credentials = json.dump(credentials, credentials_file)
 
 device_registration_payload = {
     "name": NEW_DEVICE_NAME,
@@ -88,15 +87,34 @@ if not message_downloading_json["status"] == 1:
     print("Error retrieving messages.")
     exit(4)
 
+really_delete = input("Really wanna delete all previous messages? (y/N)")
+if not really_delete in ('y', 'Y'):
+    print("Ok! old messages are kept.")
+    exit(0)
+
+id_list = list()  # so we can get the highest id using max()
+
 for item in message_downloading_json["messages"]:
+    id_list.append(item["id"])
 
-    print(item)
+last_message_id = max(id_list)
 
+update_highest_message_endpoint = ENDPOINT_UPDATE_HIGHEST_MESSAGE \
+    .format(api_url=API_URL, device_id=device_id)
 
+delete_messages_payload = {
+    "message": last_message_id,
+    "secret": secret
+}
+update_highest_message_request = requests.post(update_highest_message_endpoint,
+                                               data=delete_messages_payload)
+update_highest_message_json = json.loads(update_highest_message_request.text)
 
+if not update_highest_message_json["status"] == 1:
+    print("Error deleting previous messages.")
+    exit(5)
 
-
-
+print("Successfully deleted old messages!")
 
 
 
