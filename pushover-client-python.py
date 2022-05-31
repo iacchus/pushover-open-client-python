@@ -5,6 +5,8 @@ import json
 import os
 import requests
 
+import websocket
+
 API_URL = "https://api.pushover.net/1"
 
 ENDPOINT_LOGIN = "{api_url}/users/login.json".format(api_url=API_URL)
@@ -12,6 +14,9 @@ ENDPOINT_DEVICES = "{api_url}/devices.json".format(api_url=API_URL)
 ENDPOINT_MESSAGES = "{api_url}/messages.json".format(api_url=API_URL)
 ENDPOINT_UPDATE_HIGHEST_MESSAGE = \
         "{api_url}/devices/{device_id}/update_highest_message.json"
+
+WEBSOCKETS_SERVER_URL = "wss://client.pushover.net/push"
+WEBSOCKETS_LOGIN = "login:{device_id}:{secret}\n"
 
 CREDENTIALS_FILENAME = os.path.expanduser("~/.pushover-client-creds.json")
 
@@ -52,7 +57,7 @@ print("Login ok.")
 secret = login_json["secret"]
 credentials.update({"secret": secret})
 with open(CREDENTIALS_FILENAME, "w") as credentials_file:
-    credentials = json.dump(credentials, credentials_file)
+    json.dump(credentials, credentials_file)
 
 device_registration_payload = {
     "name": NEW_DEVICE_NAME,
@@ -71,6 +76,9 @@ if not device_registration_json["status"] == 1:
 print("Device registration ok.")
 
 device_id = device_registration_json["id"]
+credentials.update({"device_id": device_id})
+with open(CREDENTIALS_FILENAME, "w") as credentials_file:
+    credentials = json.dump(credentials, credentials_file)
 
 print("Your new device '{new_device_name}' id is {device_id}"\
     .format(new_device_name=NEW_DEVICE_NAME, device_id=device_id))
@@ -87,10 +95,10 @@ if not message_downloading_json["status"] == 1:
     print("Error retrieving messages.")
     exit(4)
 
-really_delete = input("Really wanna delete all previous messages? (y/N)")
-if not really_delete in ('y', 'Y'):
-    print("Ok! old messages are kept.")
-    exit(0)
+#really_delete = input("Really wanna delete all previous messages? (y/N): ")
+#if not really_delete in ('y', 'Y'):
+#    print("Ok! old messages are kept.")
+#    exit(0)
 
 id_list = list()  # so we can get the highest id using max()
 
@@ -116,7 +124,17 @@ if not update_highest_message_json["status"] == 1:
 
 print("Successfully deleted old messages!")
 
+websockets_login = WEBSOCKETS_LOGIN.format(device_id=device_id, secret=secret)
 
+def on_open(wsapp):
+    #print(message)
+    wsapp.send(websockets_login)
 
+def on_message(wsapp, message):
+    print(message)
 
-
+#websocket.enableTrace(True)
+wsapp = websocket.WebSocketApp(WEBSOCKETS_SERVER_URL, on_open=on_open,
+                               on_message=on_message)
+wsapp.run_forever()
+#wsapp.send(websockets_login)
