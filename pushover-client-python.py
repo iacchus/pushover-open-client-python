@@ -26,38 +26,84 @@ CURRENT_TIME = now.strftime("%Y%m%d_%H%M%S")
 NEW_DEVICE_NAME = "python-{current_time}".format(current_time=CURRENT_TIME)
 print("New device name is:", NEW_DEVICE_NAME, "You can change it's name "\
                                               "via the Pushover website.")
+class PushoverOpenClient:
 
-if not os.path.isfile(CREDENTIALS_FILENAME):
-    print('Credentials file not found. Please create.')
-    exit(1)
+    email = str()
+    password = str()
+    client_id = str()
+    secret = str()
 
-with open(CREDENTIALS_FILENAME, "r") as credentials_file:
-    credentials = json.load(credentials_file)
+    def __init__(self):
+        pass
 
-login_payload = {
-    "email": credentials['email'],
-    "password": credentials['password']
-}
+    def load_from_credentials_file(self, file_path=CREDENTIALS_FILENAME):
 
-login_request = requests.post(ENDPOINT_LOGIN, data=login_payload)
+        if not os.path.isfile(file_path):
+            raise Exception("Credentials file '{credentials_file_path}'"
+                            " not found. Please create."\
+                            .format(credentials_file_path=file_path))
 
-if login_request.status_code == 412:
-    twofa = input("Your account is configured for 2FA, "\
-                  "please enter the code: ")
-    login_form.update({"twofa": twofa})
+        with open(file_path, "r") as credentials_file:
+            credentials = json.load(credentials_file)
 
-login_json = json.loads(login_request.text)
+        self.email = credentials["email"]
+        self.password = credentials["password"]
 
-if not login_json["status"] == 1:
-    print("Authentication error; please check your credentials.")
-    exit(2)
+        if "client_id" in credentials.keys():
+            self.client_id = credentials["client_id"]
 
-print("Login ok.")
+        if "secret" in credentials.keys():
+            self.client_id = credentials["secret"]
 
-secret = login_json["secret"]
-credentials.update({"secret": secret})
-with open(CREDENTIALS_FILENAME, "w") as credentials_file:
-    json.dump(credentials, credentials_file)
+    def login(self):
+        login_payload = self._get_login_payload()
+        login_request = requests.post(ENDPOINT_LOGIN, data=login_payload)
+
+        if login_request.status_code == 412:
+            twofa = input("Your account is configured for two-factor"
+                          "authentication, please enter the 2FA code"
+                          "to proceed: ")
+            login_form.update({"twofa": twofa})
+
+        login_json = json.loads(login_request.text)
+
+        if not login_json["status"] == 1:
+            print("Authentication error; please check your credentials.")
+            exit(2)
+
+        print("Login ok.")
+
+        secret = login_json["secret"]
+        credentials.update({"secret": secret})
+        with open(CREDENTIALS_FILENAME, "w") as credentials_file:
+            json.dump(credentials, credentials_file)
+        pass
+
+    # two-factor authentication for the login process
+    def set_twofa(self, twofa):
+        pass
+    def _get_login_payload(self):
+        login_payload = {
+            "email": self.email,
+            "password": self.password
+        }
+
+        return login_payload
+
+# if not os.path.isfile(CREDENTIALS_FILENAME):
+#     print('Credentials file not found. Please create.')
+#     exit(1)
+#
+# with open(CREDENTIALS_FILENAME, "r") as credentials_file:
+#     credentials = json.load(credentials_file)
+#
+# login_payload = {
+#     "email": credentials['email'],
+#     "password": credentials['password']
+# }
+
+# login_request = requests.post(ENDPOINT_LOGIN, data=login_payload)
+
 
 device_registration_payload = {
     "name": NEW_DEVICE_NAME,
@@ -127,7 +173,6 @@ print("Successfully deleted old messages!")
 websockets_login = WEBSOCKETS_LOGIN.format(device_id=device_id, secret=secret)
 
 def on_open(wsapp):
-    #print(message)
     wsapp.send(websockets_login)
 
 def on_message(wsapp, message):
@@ -137,4 +182,3 @@ def on_message(wsapp, message):
 wsapp = websocket.WebSocketApp(WEBSOCKETS_SERVER_URL, on_open=on_open,
                                on_message=on_message)
 wsapp.run_forever()
-#wsapp.send(websockets_login)
