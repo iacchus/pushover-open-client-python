@@ -33,6 +33,10 @@ class PushoverOpenClient:
     client_id = str()
     secret = str()
 
+    twofa = str()  # two-factor authentication
+
+    needs_twofa = bool()
+
     def __init__(self):
         pass
 
@@ -60,35 +64,140 @@ class PushoverOpenClient:
         login_request = requests.post(ENDPOINT_LOGIN, data=login_payload)
 
         if login_request.status_code == 412:
-            twofa = input("Your account is configured for two-factor"
-                          "authentication, please enter the 2FA code"
-                          "to proceed: ")
-            login_form.update({"twofa": twofa})
+            self.needs_twofa = True
+            return False
 
-        login_json = json.loads(login_request.text)
+        login_response_dict = json.loads(login_request.text)
 
-        if not login_json["status"] == 1:
-            print("Authentication error; please check your credentials.")
-            exit(2)
+        if not login_response_dict["status"] == 1:
+            return False
 
-        print("Login ok.")
+        self.secret = login_response_dict["secret"]
 
-        secret = login_json["secret"]
-        credentials.update({"secret": secret})
-        with open(CREDENTIALS_FILENAME, "w") as credentials_file:
-            json.dump(credentials, credentials_file)
-        pass
+        self._write_credentials_file()
+
+        return True
+
+
+    def register_device(self, device_name=NEW_DEVICE_NAME):
+
+        device_registration_payload = self._get_device_registration_payload()
+        device_registration_request = \
+            requests.post(ENDPOINT_DEVICES, data=device_registration_payload)
+
+        device_registration_dict = json.loads(device_registration_request.text)
+
+        if not device_registration_dict["status"] == 1:
+            return False
+
+        self.device_id = device_registration_dict["id"]
+
+        self._write_credentials_file()
+
+        return True
+
+
+    def download_messages(self):
+        message_downloading_params = self._get_message_download_params()
+        message_downloading_request =\
+            requests.get(ENDPOINT_MESSAGES, params=message_downloading_params)
+
+        message_downloading_dict = json.loads(message_downloading_request.text)
+
+        if not message_downloading_dict["status"] == 1:
+            return False
+
+        for item in message_downloading_json["messages"]:
+            id_list.append(item["id"])
+
+        return True
+
+
+    def update_highest_message(self, last_message_id=None):
+        delete_messages_payload =\
+            self._get_delete_messages_payload(last_message_id=last_message_id)
+
+        update_highest_message_request =\
+            requests.post(update_highest_message_endpoint,
+                          data=delete_messages_payload)
+        update_highest_message_dict =\
+            json.loads(update_highest_message_request.text)
+
+        if not update_highest_message_dict["status"] == 1:
+            return False
+
+        return True
+
+    def _get_delete_messages_payload(self, last_message_id=None):
+
+        if not last_message_id:
+            last_message_id = self._get_highest_message_id()
+
+        delete_messages_payload = {
+            "message": last_message_id,
+            "secret": self.secret
+        }
+
+        return delete_messages_payload
+
 
     # two-factor authentication for the login process
     def set_twofa(self, twofa):
-        pass
+        self.twofa = twofa
+
+    def _get_credentials_dict(self):
+        credentials_dict = dict()
+
+        if self.email: credentials_dict.update({"email": self.email})
+        if self.password: credentials_dict.update({"password": self.email})
+        if self.secret: credentials_dict.update({"secret": self.email})
+        if self.device_id: credentials_dict.update({"device_id": self.email})
+
+        return credentials_dict
+
     def _get_login_payload(self):
         login_payload = {
             "email": self.email,
             "password": self.password
         }
 
+        if self.twofa:
+            login_payload({"twofa": self.twofa})
+
         return login_payload
+
+    def _get_device_registration_payload(self):
+
+        device_registration_payload = {
+            "name": NEW_DEVICE_NAME,
+            "os": "O",
+            "secret": login_json["secret"]
+        }
+
+        return device_registration_payload
+
+    def _get_message_download_params(self):
+        message_downloading_params = {
+            "secret": self.secret,
+            "device_id": self.device_id
+        }
+
+        return message_downloading_params
+
+    def _get_highest_message_id(self):
+
+        id_list = list()
+
+        for message in self.messages
+            id_list.append(message["id"])
+
+        self.highest_message_id = max(id_list)
+
+    def _write_credentials_file(self, file_path=CREDENTIALS_FILENAME):
+        credentials = self._get_credentials_dict()
+
+        with open(file_path, "w") as credentials_file:
+            json.dump(credentials, credentials_file)
 
 # if not os.path.isfile(CREDENTIALS_FILENAME):
 #     print('Credentials file not found. Please create.')
@@ -104,71 +213,75 @@ class PushoverOpenClient:
 
 # login_request = requests.post(ENDPOINT_LOGIN, data=login_payload)
 
+# twofa = input("Your account is configured for two-factor"
+#               "authentication, please enter the 2FA code"
+#               "to proceed: ")
+# login_form.update({"twofa": twofa})
 
-device_registration_payload = {
-    "name": NEW_DEVICE_NAME,
-    "os": "O",
-    "secret": login_json["secret"]
-}
-device_registration_request = requests.post(ENDPOINT_DEVICES,
-                                            data=device_registration_payload)
+# device_registration_payload = {
+#     "name": NEW_DEVICE_NAME,
+#     "os": "O",
+#     "secret": login_json["secret"]
+# }
+# device_registration_request = requests.post(ENDPOINT_DEVICES,
+#                                             data=device_registration_payload)
+#
+# device_registration_json = json.loads(device_registration_request.text)
+#
+# if not device_registration_json["status"] == 1:
+#     print("Error registering device: ", device_registration_json["errors"])
+#     exit(3)
+#
+# print("Device registration ok.")
+#
+# device_id = device_registration_json["id"]
+# credentials.update({"device_id": device_id})
+# with open(CREDENTIALS_FILENAME, "w") as credentials_file:
+#     credentials = json.dump(credentials, credentials_file)
+#
+# print("Your new device '{new_device_name}' id is {device_id}"\
+#     .format(new_device_name=NEW_DEVICE_NAME, device_id=device_id))
 
-device_registration_json = json.loads(device_registration_request.text)
-
-if not device_registration_json["status"] == 1:
-    print("Error registering device: ", device_registration_json["errors"])
-    exit(3)
-
-print("Device registration ok.")
-
-device_id = device_registration_json["id"]
-credentials.update({"device_id": device_id})
-with open(CREDENTIALS_FILENAME, "w") as credentials_file:
-    credentials = json.dump(credentials, credentials_file)
-
-print("Your new device '{new_device_name}' id is {device_id}"\
-    .format(new_device_name=NEW_DEVICE_NAME, device_id=device_id))
-
-message_downloading_params = {
-    "secret": secret,
-    "device_id": device_id
-}
-message_downloading_request = requests.get(ENDPOINT_MESSAGES, params=message_downloading_params)
-
-message_downloading_json = json.loads(message_downloading_request.text)
-
-if not message_downloading_json["status"] == 1:
-    print("Error retrieving messages.")
-    exit(4)
+# message_downloading_params = {
+#     "secret": secret,
+#     "device_id": device_id
+# }
+# message_downloading_request = requests.get(ENDPOINT_MESSAGES, params=message_downloading_params)
+#
+# message_downloading_json = json.loads(message_downloading_request.text)
+#
+# if not message_downloading_json["status"] == 1:
+#     print("Error retrieving messages.")
+#     exit(4)
 
 #really_delete = input("Really wanna delete all previous messages? (y/N): ")
 #if not really_delete in ('y', 'Y'):
 #    print("Ok! old messages are kept.")
 #    exit(0)
 
-id_list = list()  # so we can get the highest id using max()
+# id_list = list()  # so we can get the highest id using max()
+#
+# for item in message_downloading_json["messages"]:
+#     id_list.append(item["id"])
+#
+# last_message_id = max(id_list)
 
-for item in message_downloading_json["messages"]:
-    id_list.append(item["id"])
-
-last_message_id = max(id_list)
-
-update_highest_message_endpoint = ENDPOINT_UPDATE_HIGHEST_MESSAGE \
-    .format(api_url=API_URL, device_id=device_id)
-
-delete_messages_payload = {
-    "message": last_message_id,
-    "secret": secret
-}
-update_highest_message_request = requests.post(update_highest_message_endpoint,
-                                               data=delete_messages_payload)
-update_highest_message_json = json.loads(update_highest_message_request.text)
-
-if not update_highest_message_json["status"] == 1:
-    print("Error deleting previous messages.")
-    exit(5)
-
-print("Successfully deleted old messages!")
+# update_highest_message_endpoint = ENDPOINT_UPDATE_HIGHEST_MESSAGE \
+#     .format(api_url=API_URL, device_id=device_id)
+#
+# delete_messages_payload = {
+#     "message": last_message_id,
+#     "secret": secret
+# }
+# update_highest_message_request = requests.post(update_highest_message_endpoint,
+#                                                data=delete_messages_payload)
+# update_highest_message_json = json.loads(update_highest_message_request.text)
+#
+# if not update_highest_message_json["status"] == 1:
+#     print("Error deleting previous messages.")
+#     exit(5)
+#
+# print("Successfully deleted old messages!")
 
 websockets_login = WEBSOCKETS_LOGIN.format(device_id=device_id, secret=secret)
 
