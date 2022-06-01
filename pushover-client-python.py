@@ -51,9 +51,9 @@ class PushoverOpenClient:
     device_id = str()
     secret = str()
 
-    twofa = str()  # two-factor authentication
+    twofa: str = None  # two-factor authentication
 
-    needs_twofa = bool()
+    needs_twofa = False
 
     messages = dict()  # { message_id: {message_dict...}, }
 
@@ -101,14 +101,28 @@ class PushoverOpenClient:
 
         return self
 
-    def login(self, rewrite_creds_file=True):
+    def login(self, email=None, password=None, twofa=None,
+              rewrite_creds_file=True):
         """
         Logs in with email and password, achieving a `secret` from the API.
 
         As specified in https://pushover.net/api/client#login
         """
 
-        login_payload = self._get_login_payload()
+        if not email:
+            email = self.email
+
+        if not password:
+            password = self.password
+
+        if self.needs_twofa:
+            if not twofa and not self.twofa:
+                return False
+            if twofa: twofa = twofa
+            elif self.needs_twofa: twofa = self.twofa
+
+        login_payload = self._get_login_payload(email=email, password=password,
+                                                twofa=twofa)
 
         login_response = requests.post(ENDPOINT_LOGIN, data=login_payload)
         login_response_dict = json.loads(login_response.text)
@@ -301,14 +315,14 @@ class PushoverOpenClient:
 
         return credentials_dict
 
-    def _get_login_payload(self):
+    def _get_login_payload(self, email, password, twofa):
         login_payload = {
-            "email": self.email,
-            "password": self.password
+            "email": email,
+            "password": password
         }
 
-        if self.twofa:
-            login_payload({"twofa": self.twofa})
+        if twofa:
+            login_payload({"twofa": twofa})
 
         return login_payload
 
@@ -331,6 +345,18 @@ class PushoverOpenClient:
 
         return message_downloading_params
 
+
+def print_data_errors(errors):
+    # errors can be a list or a dict
+    for error in errors.values():
+        if isinstance(errors, list):
+            print("ERROR:", error)
+        elif isinstance(errors, dict):
+            for key, value_list in errors.items():
+                for value in value_list:
+                    print("ERROR:", key, "-", value)
+        else:  # this doesn't ever happen, only list or dict, but I'm unsure.
+            print("ERROR:", error)
 
 pushover_client = PushoverOpenClient().load_from_credentials_file()
 
@@ -356,8 +382,8 @@ def dummy_login():
             print("json:", pushover_client.login_response.json)
             print("text:", pushover_client.login_response.text)
             print("status code:", pushover_client.login_response.status_code)
-            for error in pushover_client.login_response_data["errors"]:
-                print("ERROR", error)
+            errors = pushover_client.login_response_data["errors"]
+            print_data_errors(errors=errors)
             exit(1)
 
     print("Login ok. secret:", secret)
@@ -369,16 +395,17 @@ secret = dummy_login()
 def dummy_register_device():
     print("Registering new device...")
 
-    device_id = pushover_client.register_device(device_name="ppppppppppppppppppppppppppppppppppppppppppppppppppppppp")
+    device_id = pushover_client.register_device()
 
     if not device_id:
         print("Error registering device.",
-              pushover_client.device_registration_data)
+              pushover_client.device_registration_response_data)
         print("json:", pushover_client.device_registration_response.json)
         print("text:", pushover_client.device_registration_response.text)
         print("status code:", pushover_client.device_registration_response.status_code)
-        for error in pushover_client.device_registration_response_data["errors"]:
-            print("ERROR", error)
+
+        errors = pushover_client.device_registration_response_data["errors"]
+        print_data_errors(errors=errors)
         exit(2)
 
     print("Device registered. device_id:", device_id)
