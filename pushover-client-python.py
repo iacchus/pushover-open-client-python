@@ -454,24 +454,10 @@ class PushoverOpenClientRealTime:
                             pushover_websocket_login_string)
 
     def _on_message(self, websocketapp, message):
-        # This means a websocket message by the Pushover Websockets server;
-        # Pushover websocket server messages can be the following:
-        #
-        # b'#' - Keep-alive packet, no response needed.
-        # b'!' - A new message has arrived; you should perform a sync.
-        # b'R' - Reload request; you should drop your connection and
-        #        re-connect.
-        # b'E' - Error; a permanent problem occured and you should not
-        #        automatically re-connect. Prompt the user to login again or
-        #        re-enable the device.
-        # b'A' - Error; the device logged in from another session and this
-        #       session is being closed. Do not automatically re-connect.
-        #
-        # As specified in https://pushover.net/api/client#websocket
         if message in self.pushover_websocket_server_commands:
             self.pushover_websocket_server_commands[message]()
 
-        print(message)
+        print(message, PUSHOVER_WEBSOCKET_SERVER_MESSAGES_MEANING[message])
 
     def _on_error(self, websocketapp, exception):
         pass
