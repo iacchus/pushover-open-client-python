@@ -4,6 +4,7 @@
 # specification: https://pushover.net/api/client
 
 import datetime
+import functools
 import json
 import os
 import requests
@@ -41,6 +42,9 @@ PUSHOVER_WEBSOCKET_SERVER_MESSAGES_MEANING = {
           "session is being closed. Do not automatically re-connect."
 }
 
+COMMAND_FUNCTIONS_REGISTRY = {}
+PARSING_FUNCTIONS_REGISTRY = {}
+
 def print_data_errors(errors):
     # errors can be a list or a dict
     if isinstance(errors, list):
@@ -51,6 +55,22 @@ def print_data_errors(errors):
                 print("ERROR:", key, "-", error)
     else:  # this doesn't ever happen, only list or dict, but I'm unsure.
         print("ERROR:", errors)
+
+def register_command(f, *args, **kwargs):
+    """Decorator who register command functions.
+
+    Commands execute user-defined functions. The name of the function is the
+    command, ie., the first word of the received notification; the other words
+    of the notification are the parameters.
+    """
+    pass
+
+def register_parser(f, *args, **kwargs):
+    """Decorator who register perser functions.
+
+    Parser functions receive raw data received from each notification from the
+    pushover server, and parses it."""
+    pass
 
 class PushoverOpenClient:
 
@@ -386,12 +406,6 @@ class PushoverOpenClient:
 
         return delete_messages_payload
 
-print("Connecting to the websocket server..")
-# As specified in https://pushover.net/api/client#websocket
-
-# websocket-client documentation:
-# https://websocket-client.readthedocs.io/en/latest/app.html
-
 class PushoverOpenClientRealTime:
 
     pushover_websocket_server_commands = dict()
@@ -414,7 +428,7 @@ class PushoverOpenClientRealTime:
         }
 
         self.pushover_websocket_login_string = \
-            pushover_client.get_websocket_login_string()
+            pushover_open_client.get_websocket_login_string()
 
         self.websocketapp = \
             websocket.WebSocketApp(pushover_websocket_server_url,
@@ -440,7 +454,7 @@ class PushoverOpenClientRealTime:
 
     def send_login(self, pushover_websocket_connection,
                    pushover_websocket_login_string):
-        pushover_websocket_connection.send(websocket_login_string)
+        pushover_websocket_connection.send(pushover_websocket_login_string)
 
     def run_forever(self):
         self.websocketapp.run_forever()
