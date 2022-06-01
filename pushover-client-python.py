@@ -31,7 +31,7 @@ class PushoverOpenClient:
 
     email = str()
     password = str()
-    client_id = str()
+    device_id = str()
     secret = str()
 
     twofa = str()  # two-factor authentication
@@ -41,7 +41,7 @@ class PushoverOpenClient:
     messages = dict()  # { message_id: {message_dict...}, }
 
     login_response = None  # requests.Response
-    login_data = dict()
+    login_response_data = dict()
 
     device_registration_response = None  # requests.Response
     device_registration_data = dict()
@@ -53,6 +53,7 @@ class PushoverOpenClient:
     update_highest_message_data = dict()
 
     def __init__(self):
+        #self.load_from_credentials_file()
         pass
 
     def load_from_credentials_file(self, file_path=CREDENTIALS_FILENAME):
@@ -76,7 +77,9 @@ class PushoverOpenClient:
         if "secret" in credentials.keys():
             self.client_id = credentials["secret"]
 
-    def login(self):
+        return self
+
+    def login(self, rewrite_creds_file=True):
         """
         Logs in with email and password, achieving a `secret` from the API.
         """
@@ -103,7 +106,9 @@ class PushoverOpenClient:
 
         # else...
         self.secret = login_response_dict["secret"]
-        self._write_credentials_file()
+
+        if rewrite_creds_file:
+            self.write_credentials_file()
 
         return self.secret
 
@@ -115,7 +120,8 @@ class PushoverOpenClient:
         """
         self.twofa = twofa
 
-    def register_device(self, device_name=NEW_DEVICE_NAME):
+    def register_device(self, device_name=NEW_DEVICE_NAME,
+                        rewrite_creds_file=True):
         """Registers a new client device on the Pushover account."""
 
         device_registration_payload = \
@@ -134,7 +140,8 @@ class PushoverOpenClient:
         # else...
         self.device_id = device_registration_dict["id"]
 
-        self._write_credentials_file()
+        if rewrite_creds_file:
+            self.write_credentials_file()
 
         return self.device_id
 
@@ -171,10 +178,7 @@ class PushoverOpenClient:
         """
 
         if not last_message_id:
-            last_message_id = self.get_highest_message_id()
-        #if not self.messages:
-        #    self.download_messages()
-
+            last_message_id = self.get_highest_message_id(redownload=False)
 
         delete_messages_payload =\
             self._get_delete_messages_payload(last_message_id=last_message_id)
@@ -207,11 +211,12 @@ class PushoverOpenClient:
         if not self.messages:
             self.download_messages()
 
-        id_list = [message["id"] for message in self.messages]
+        #id_list = [message["id"] for message in self.messages.values()]
         # id_list = list()
         # for message in self.messages:
         #     id_list.append(message["id"])
-        highest_message_id = max([message["id"] for message in self.messages])
+        highest_message_id = max([message["id"] for message
+                                  in self.messages.values()])
 
         self.highest_message_id = highest_message_id
 
@@ -225,7 +230,7 @@ class PushoverOpenClient:
         credentials = self._get_credentials_dict()
 
         with open(file_path, "w") as credentials_file:
-            json.dump(credentials, credentials_file)
+            json.dump(credentials, credentials_file, indent=2)
 
     def get_websockets_login_string(self):
         websockets_login_string = WEBSOCKETS_LOGIN \
@@ -236,7 +241,7 @@ class PushoverOpenClient:
     def _get_delete_messages_payload(self, last_message_id=None):
 
         if not last_message_id:
-            last_message_id = self._get_highest_message_id()
+            last_message_id = self.get_highest_message_id()
 
         delete_messages_payload = {
             "message": last_message_id,
@@ -249,9 +254,10 @@ class PushoverOpenClient:
         credentials_dict = dict()
 
         if self.email: credentials_dict.update({"email": self.email})
-        if self.password: credentials_dict.update({"password": self.email})
-        if self.secret: credentials_dict.update({"secret": self.email})
-        if self.device_id: credentials_dict.update({"device_id": self.email})
+        if self.password: credentials_dict.update({"password": self.password})
+        if self.secret: credentials_dict.update({"secret": self.secret})
+        if self.device_id: credentials_dict.update({"device_id":
+                                                        self.device_id})
 
         return credentials_dict
 
@@ -293,7 +299,10 @@ class PushoverOpenClient:
     #         json.dump(credentials, credentials_file)
 
 pushover_client = PushoverOpenClient().load_from_credentials_file()
+#pushover_client = PushoverOpenClient().load_from_credentials_file()
 
+print("Logging in...")
+# Please, improve this :)
 while True:
     secret = pushover_client.login()
 
@@ -311,11 +320,57 @@ while True:
               pushover_client.login_response_data)
         exit(1)
 
+print("Login ok. secret:", secret)
+
+print("Registering new device...")
+
+device_id = pushover_client.register_device()
+
+if not device_id:
+    print("Error registering device.",
+          pushover_client.device_registration_data)
+    exit(2)
+
+print("Device registered. device_id:", device_id)
+
+print("Downloading messages...")
+
+pushover_client.messages.clear()
+messages = pushover_client.download_messages()
+
+if not messages:
+    print("Error downloading messages.",
+          pushover_client.message_downloading_data)
+    exit(3)
+
+print("Messages were downloaded. Here they are:", messages)
+
+print("Let's delete all messages now?")
+
+messages_before = len(pushover_client.messages)
+
+is_success = pushover_client.delete_all_messages()
+pushover_client.messages.clear()
+
+if not is_success:
+    print("Error deleting old messages.",
+          pushover_client.update_highest_message_data)
+    exit(4)
+
+pushover_client.download_messages()
+messages_after = len(pushover_client.messages)
+
+print("messages_before:", messages_before)
+print("messages_after:", messages_after)
+
+
+print("Connecting to the websockets server..")
+
 # "login:{device_id}:{secret}\n"
-websockets_login = pushover_client.get_websockets_string()
+websockets_login_string = pushover_client.get_websockets_login_string()
 
 def on_open(wsapp):
-    wsapp.send(websockets_login)
+    wsapp.send(websockets_login_string)
 
 def on_message(wsapp, message):
     print(message)
