@@ -67,11 +67,11 @@ class PushoverOpenClient:
 
 
     message_downloading_response = None  # requests.Response
-    message_downloading_data = dict()
+    message_downloading_response_data = dict()
     message_downloading_errors = None  # TODO: IMPLEMENT ME!!!
 
     update_highest_message_response = None  # requests.Response
-    update_highest_message_data = dict()
+    update_highest_message_response_data = dict()
     update_highest_message_errors = None  # TODO: IMPLEMENT ME!!!
 
     def __init__(self):
@@ -215,7 +215,7 @@ class PushoverOpenClient:
             json.loads(message_downloading_response.text)
 
         self.message_downloading_response = message_downloading_response
-        self.message_downloading_data = message_downloading_dict
+        self.message_downloading_response_data = message_downloading_dict
 
         if not message_downloading_dict["status"] == 1:
             return False
@@ -229,7 +229,8 @@ class PushoverOpenClient:
 
         return messages
 
-    def delete_all_messages(self, last_message_id=None):
+    def delete_all_messages(self, device_id=None, secret=None,
+                            last_message_id=None):
         """
         Deletes all messages for this device. If not deleted, tey keep
         being downloaded again.
@@ -237,11 +238,18 @@ class PushoverOpenClient:
         As specified in https://pushover.net/api/client#delete
         """
 
+        if not device_id:
+            device_id = self.device_id
+
+        if not secret:
+            secret = self.secret
+
         if not last_message_id:
             last_message_id = self.get_highest_message_id(redownload=False)
 
         delete_messages_payload =\
-            self._get_delete_messages_payload(last_message_id=last_message_id)
+            self._get_delete_messages_payload(secret=secret,
+                                              message=last_message_id)
 
         update_highest_message_endpoint =\
             ENDPOINT_UPDATE_HIGHEST_MESSAGE.format(api_url=PUSHOVER_API_URL,
@@ -269,14 +277,9 @@ class PushoverOpenClient:
             self.download_messages()
 
         if not self.messages:
-            self.download_messages()
+            return False
 
-        #id_list = [message["id"] for message in self.messages.values()]
-        # id_list = list()
-        # for message in self.messages:
-        #     id_list.append(message["id"])
-        highest_message_id = max([message["id"] for message
-                                  in self.messages.values()])
+        highest_message_id = max(self.messages.keys())
 
         self.highest_message_id = highest_message_id
 
@@ -334,7 +337,6 @@ class PushoverOpenClient:
 
     def _get_message_downloading_params(self, secret, device_id):
 
-    print("DEVICE_ID IS", device_id)
         message_downloading_params = {
             "secret": secret,
             "device_id": device_id
@@ -342,14 +344,11 @@ class PushoverOpenClient:
 
         return message_downloading_params
 
-    def _get_delete_messages_payload(self, last_message_id=None):
-
-        if not last_message_id:
-            last_message_id = self.get_highest_message_id()
+    def _get_delete_messages_payload(self, message, secret):
 
         delete_messages_payload = {
-            "message": last_message_id,
-            "secret": self.secret
+            "message": message,
+            "secret": secret
         }
 
         return delete_messages_payload
@@ -429,8 +428,11 @@ def dummy_message_downloading():
 
     if not messages:
         print("Error downloading messages.",
-              pushover_client.message_downloading_data)
-        errors = pushover_client.message_downloading_data["errors"]
+              pushover_client.message_downloading_response_data)
+        print("json:", pushover_client.message_downloading_response.json)
+        print("text:", pushover_client.message_downloading_response.text)
+        print("status code:", pushover_client.message_downloading_response.status_code)
+        errors = pushover_client.message_downloading_response_data["errors"]
         print_data_errors(errors)
         exit(3)
 
@@ -439,7 +441,9 @@ def dummy_message_downloading():
     return messages
 
 messages = dummy_message_downloading()
-number_of_messages_after_deletion = len(pushover_client.messages)
+number_of_messages_before_deletion = len(pushover_client.messages)
+
+print("MESSAGES:", pushover_client.messages)
 
 def dummy_delete_all_messages():
     print("Let's delete all messages now?")
@@ -451,7 +455,7 @@ def dummy_delete_all_messages():
 
     if not is_success:
         print("Error deleting old messages.",
-              pushover_client.update_highest_message_data)
+              pushover_client.update_highest_message_response_data)
         exit(4)
 
     pushover_client.download_messages()
