@@ -27,6 +27,8 @@ NEW_DEVICE_NAME = "python-{current_time}".format(current_time=CURRENT_TIME)
 
 class PushoverOpenClient:
 
+    credentials_filename = CREDENTIALS_FILENAME
+
     email = str()
     password = str()
     client_id = str()
@@ -41,6 +43,15 @@ class PushoverOpenClient:
     login_response = None  # requests.Response
     login_data = dict()
 
+    device_registration_response = None  # requests.Response
+    device_registration_data = dict()
+
+    message_downloading_response = None  # requests.Response
+    message_downloading_data = dict()
+
+    update_highest_message_response = None  # requests.Response
+    update_highest_message_data = dict()
+
     def __init__(self):
         pass
 
@@ -54,6 +65,8 @@ class PushoverOpenClient:
         with open(file_path, "r") as credentials_file:
             credentials = json.load(credentials_file)
 
+        self.credentials_filename = file_path
+
         self.email = credentials["email"]
         self.password = credentials["password"]
 
@@ -64,6 +77,10 @@ class PushoverOpenClient:
             self.client_id = credentials["secret"]
 
     def login(self):
+        """
+        Logs in with email and password, achieving a `secret` from the API.
+        """
+
         login_payload = self._get_login_payload()
 
         login_response = requests.post(ENDPOINT_LOGIN, data=login_payload)
@@ -78,66 +95,93 @@ class PushoverOpenClient:
         if login_response.status_code == 412:
             self.needs_twofa = True
             return None
+        else:
+            self.needs_twofa = False
 
         if not login_response_dict["status"] == 1:
             return None
 
         # else...
         self.secret = login_response_dict["secret"]
-        self.needs_twofa = False
-
         self._write_credentials_file()
 
         return self.secret
 
+    def set_twofa(self, twofa):
+        """
+        Sets the code for two-factor authentication,
+        if the user has it enabled. After this, `self.login()` should be
+        executed again.
+        """
+        self.twofa = twofa
 
     def register_device(self, device_name=NEW_DEVICE_NAME):
+        """Registers a new client device on the Pushover account."""
 
-        device_registration_payload = self._get_device_registration_payload()
+        device_registration_payload = \
+            self._get_device_registration_payload(device_name=device_name)
         device_registration_response = \
             requests.post(ENDPOINT_DEVICES, data=device_registration_payload)
 
         device_registration_dict = json.loads(device_registration_response.text)
 
+        self.device_registration_response = device_registration_response
+        self.device_registration_data = device_registration_dict
+
         if not device_registration_dict["status"] == 1:
-            return False
+            return None
 
         # else...
         self.device_id = device_registration_dict["id"]
 
         self._write_credentials_file()
 
-        return True
-
+        return self.device_id
 
     def download_messages(self):
+        """Downloads all messages currently on this device."""
 
-        message_downloading_params = self._get_message_download_params()
+        message_downloading_params = self._get_message_downloading_params()
         message_downloading_response =\
             requests.get(ENDPOINT_MESSAGES, params=message_downloading_params)
 
         message_downloading_dict =\
             json.loads(message_downloading_response.text)
 
+        self.message_downloading_response = message_downloading_response
+        self.message_downloading_data = message_downloading_dict
+
         if not message_downloading_dict["status"] == 1:
             return False
 
+        messages = message_downloading_dict["messages"]
+
         # else...
-        for message in message_downloading_dict["messages"]:
+        for message in messages:
             message_id = message["id"]
             self.messages.update({message_id: message})
 
-        return True
-
+        return messages
 
     #def update_highest_message(self, last_message_id=None):
     def delete_all_messages(self, last_message_id=None):
+        """
+        Deletes all messages for this device. If not deleted, tey keep
+        being downloaded again.
+        """
+
+        if not last_message_id:
+            last_message_id = self.get_highest_message_id()
+        #if not self.messages:
+        #    self.download_messages()
+
+
         delete_messages_payload =\
             self._get_delete_messages_payload(last_message_id=last_message_id)
 
-        update_highest_message_endpoint = ENDPOINT_UPDATE_HIGHEST_MESSAGE\
-                                                .format(api_url=API_URL,
-                                                        device_id=self.device_id)
+        update_highest_message_endpoint =\
+            ENDPOINT_UPDATE_HIGHEST_MESSAGE.format(api_url=API_URL,
+                                                   device_id=self.device_id)
 
         update_highest_message_response =\
             requests.post(update_highest_message_endpoint,
@@ -146,11 +190,48 @@ class PushoverOpenClient:
         update_highest_message_dict =\
             json.loads(update_highest_message_response.text)
 
+        self.update_highest_message_response = update_highest_message_response
+        self.update_highest_message_data = update_highest_message_dict
+
         if not update_highest_message_dict["status"] == 1:
             return False
 
         # else...
         return True
+
+    def get_highest_message_id(self, redownload=False):
+
+        if redownload:
+            self.download_messages()
+
+        if not self.messages:
+            self.download_messages()
+
+        id_list = [message["id"] for message in self.messages]
+        # id_list = list()
+        # for message in self.messages:
+        #     id_list.append(message["id"])
+        highest_message_id = max([message["id"] for message in self.messages])
+
+        self.highest_message_id = highest_message_id
+
+        return self.highest_message_id
+
+    def write_credentials_file(self, file_path=None):
+
+        if not file_path:
+            file_path = self.credentials_filename
+
+        credentials = self._get_credentials_dict()
+
+        with open(file_path, "w") as credentials_file:
+            json.dump(credentials, credentials_file)
+
+    def get_websockets_login_string(self):
+        websockets_login_string = WEBSOCKETS_LOGIN \
+            .format(device_id=self.device_id, secret=self.secret)
+        return websockets_login_string
+
 
     def _get_delete_messages_payload(self, last_message_id=None):
 
@@ -163,17 +244,6 @@ class PushoverOpenClient:
         }
 
         return delete_messages_payload
-
-
-    # two-factor authentication for the login process
-    def set_twofa(self, twofa):
-        self.twofa = twofa
-
-    def _write_credentials_file(self, file_path=CREDENTIALS_FILENAME):
-        credentials = self._get_credentials_dict()
-
-        with open(file_path, "w") as credentials_file:
-            json.dump(credentials, credentials_file)
 
     def _get_credentials_dict(self):
         credentials_dict = dict()
@@ -196,10 +266,10 @@ class PushoverOpenClient:
 
         return login_payload
 
-    def _get_device_registration_payload(self):
+    def _get_device_registration_payload(self, device_name=NEW_DEVICE_NAME):
 
         device_registration_payload = {
-            "name": NEW_DEVICE_NAME,
+            "name": device_name,
             "os": "O",
             "secret": self.secret
         }
@@ -215,24 +285,34 @@ class PushoverOpenClient:
 
         return message_downloading_params
 
-    def _get_highest_message_id(self):
 
-        id_list = list()
-
-        for message in self.messages
-            id_list.append(message["id"])
-
-        self.highest_message_id = max(id_list)
-
-    def _write_credentials_file(self, file_path=CREDENTIALS_FILENAME):
-        credentials = self._get_credentials_dict()
-
-        with open(file_path, "w") as credentials_file:
-            json.dump(credentials, credentials_file)
+    # def _write_credentials_file(self, file_path=CREDENTIALS_FILENAME):
+    #     credentials = self._get_credentials_dict()
+    #
+    #     with open(file_path, "w") as credentials_file:
+    #         json.dump(credentials, credentials_file)
 
 pushover_client = PushoverOpenClient().load_from_credentials_file()
 
-websockets_login = WEBSOCKETS_LOGIN.format(device_id=device_id, secret=secret)
+while True:
+    secret = pushover_client.login()
+
+    if secret:
+        break
+
+    elif not secret and pushover_client.needs_twofa:
+        pushover_client.twofa = input("Your account is set up to using "
+                                      "two-factor authentication; Please "
+                                      "enter your code: ")
+        continue
+
+    elif not secret and not pushover_client.needs_twofa:
+        print("Error authenticating. Please check your account's credentials",
+              pushover_client.login_response_data)
+        exit(1)
+
+# "login:{device_id}:{secret}\n"
+websockets_login = pushover_client.get_websockets_string()
 
 def on_open(wsapp):
     wsapp.send(websockets_login)
