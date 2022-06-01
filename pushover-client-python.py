@@ -10,16 +10,17 @@ import requests
 
 import websocket
 
-API_URL = "https://api.pushover.net/1"
+PUSHOVER_API_URL = "https://api.pushover.net/1"
 
-ENDPOINT_LOGIN = "{api_url}/users/login.json".format(api_url=API_URL)
-ENDPOINT_DEVICES = "{api_url}/devices.json".format(api_url=API_URL)
-ENDPOINT_MESSAGES = "{api_url}/messages.json".format(api_url=API_URL)
+ENDPOINT_LOGIN = "{api_url}/users/login.json".format(api_url=PUSHOVER_API_URL)
+ENDPOINT_DEVICES = "{api_url}/devices.json".format(api_url=PUSHOVER_API_URL)
+ENDPOINT_MESSAGES = "{api_url}/messages.json".format(api_url=PUSHOVER_API_URL)
 ENDPOINT_UPDATE_HIGHEST_MESSAGE = \
         "{api_url}/devices/{device_id}/update_highest_message.json"
 
-WEBSOCKETS_SERVER_URL = "wss://client.pushover.net/push"
-WEBSOCKETS_LOGIN = "login:{device_id}:{secret}\n"
+#WEBSOCKET_SERVER_URL = "wss://client.pushover.net/push"
+PUSHOVER_WEBSOCKET_SERVER_URL = "wss://client.pushover.net/push"
+WEBSOCKET_LOGIN = "login:{device_id}:{secret}\n"
 
 CREDENTIALS_FILENAME = os.path.expanduser("~/.pushover-open-client-creds.json")
 
@@ -27,6 +28,17 @@ now = datetime.datetime.now()
 CURRENT_TIME = now.strftime("%Y%m%d_%H%M%S")
 # device name is up to 25 chars, [A-Za-z0-9_-]
 NEW_DEVICE_NAME = "python-{current_time}".format(current_time=CURRENT_TIME)
+
+PUSHOVER_WEBSOCKET_SERVER_MESSAGES_MEANING = {
+    b'#': "Keep-alive packet, no response needed.",
+    b'!': "A new message has arrived; you should perform a sync.",
+    b'R': "Reload request; you should drop your connection and re-connect.",
+    b'E': "Error; a permanent problem occured and you should not "
+           "automatically re-connect. Prompt the user to login again or "
+           "re-enable the device.",
+    b'A': "Error; the device logged in from another session and this "
+          "session is being closed. Do not automatically re-connect."
+}
 
 class PushoverOpenClient:
 
@@ -247,10 +259,10 @@ class PushoverOpenClient:
         with open(file_path, "w") as credentials_file:
             json.dump(credentials, credentials_file, indent=2)
 
-    def get_websockets_login_string(self):
-        websockets_login_string = WEBSOCKETS_LOGIN \
+    def get_websocket_login_string(self):
+        websocket_login_string = WEBSOCKET_LOGIN \
             .format(device_id=self.device_id, secret=self.secret)
-        return websockets_login_string
+        return websocket_login_string
 
 
     def _get_delete_messages_payload(self, last_message_id=None):
@@ -378,33 +390,71 @@ messages_after = len(pushover_client.messages)
 print("messages_before:", messages_before)
 print("messages_after:", messages_after)
 
-print("Connecting to the websockets server..")
+print("Connecting to the websocket server..")
 # As specified in https://pushover.net/api/client#websocket
 
+class PushoverOpenClientWebsockets:
+
+    def __init__(self, pushover_open_client, pushover_websocket_server_url=\
+                 PUSHOVER_WEBSOCKET_SERVER_URL):
+        self.websocketapp = \
+            websocket.WebSocketApp(pushover_websocket_server_url,
+                                   on_open=on_open, on_message=on_message)
+
+    def on_open(self, wsapp):
+        self.websocketapp.send(websocket_login_string)
+
+    def on_message(self, websocketapp, message):
+        # This means a websocket message by the Pushover Websockets server;
+        # Pushover websocket server messages can be the following:
+        #
+        # b'#' - Keep-alive packet, no response needed.
+        # b'!' - A new message has arrived; you should perform a sync.
+        # b'R' - Reload request; you should drop your connection and re-connect.
+        # b'E' - Error; a permanent problem occured and you should not
+        #        automatically re-connect. Prompt the user to login again or
+        #        re-enable the device.
+        # b'A' - Error; the device logged in from another session and this session
+        #        is being closed. Do not automatically re-connect.
+        #
+        # As specified in https://pushover.net/api/client#websocket
+
+        print(message)
+
+    def on_error(self, websocketapp, exception):
+        pass
+
+    def on_close(self, websocketapp, close_status_code, close_msg):
+        pass
+
+    def run_forever(self):
+        self.websocketapp.run_forever()
+
 # "login:{device_id}:{secret}\n"
-websockets_login_string = pushover_client.get_websockets_login_string()
+# websocket_login_string = pushover_client.get_websocket_login_string()
 
-def on_open(wsapp):
-    wsapp.send(websockets_login_string)
-
-def on_message(wsapp, message):
-
-    # Pushover websockets server messages can be the following:
-    #
-    # b'#' - Keep-alive packet, no response needed.
-    # b'!' - A new message has arrived; you should perform a sync.
-    # b'R' - Reload request; you should drop your connection and re-connect.
-    # b'E' - Error; a permanent problem occured and you should not
-    #        automatically re-connect. Prompt the user to login again or
-    #        re-enable the device.
-    # b'A' - Error; the device logged in from another session and this session
-    #        is being closed. Do not automatically re-connect.
-    #
-    # As specified in https://pushover.net/api/client#websocket
-
-    print(message)
-
-#websocket.enableTrace(True)
-wsapp = websocket.WebSocketApp(WEBSOCKETS_SERVER_URL, on_open=on_open,
-                               on_message=on_message)
-wsapp.run_forever()
+# def on_open(wsapp):
+#     wsapp.send(websocket_login_string)
+#
+# def on_message(wsapp, message):
+#
+#     # Pushover websocket server messages can be the following:
+#     #
+#     # b'#' - Keep-alive packet, no response needed.
+#     # b'!' - A new message has arrived; you should perform a sync.
+#     # b'R' - Reload request; you should drop your connection and re-connect.
+#     # b'E' - Error; a permanent problem occured and you should not
+#     #        automatically re-connect. Prompt the user to login again or
+#     #        re-enable the device.
+#     # b'A' - Error; the device logged in from another session and this session
+#     #        is being closed. Do not automatically re-connect.
+#     #
+#     # As specified in https://pushover.net/api/client#websocket
+#
+#     print(message)
+#
+#
+# #websocket.enableTrace(True)
+# wsapp = websocket.WebSocketApp(WEBSOCKET_SERVER_URL, on_open=on_open,
+#                                on_message=on_message)
+# wsapp.run_forever()
