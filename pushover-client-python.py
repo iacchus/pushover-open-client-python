@@ -418,7 +418,6 @@ def dummy_login():
     print("Login ok. secret:", secret)
 
     return secret
-
 secret = dummy_login()
 
 def dummy_register_device():
@@ -440,7 +439,6 @@ def dummy_register_device():
     print("Device registered. device_id:", device_id)
 
     return device_id
-
 device_id = dummy_register_device()
 
 def dummy_message_downloading():
@@ -462,10 +460,8 @@ def dummy_message_downloading():
     print("Messages were downloaded. Here they are:", messages)
 
     return messages
-
 messages = dummy_message_downloading()
 number_of_messages_before_deletion = len(pushover_client.messages)
-
 print("MESSAGES:", pushover_client.messages)
 
 def dummy_delete_all_messages():
@@ -473,12 +469,17 @@ def dummy_delete_all_messages():
 
     messages_before = len(pushover_client.messages)
 
-    is_success = pushover_client.delete_all_messages()
+    is_success = pushover_client.delete_all_messages(secret="7877687")
     pushover_client.messages.clear()
 
     if not is_success:
         print("Error deleting old messages.",
               pushover_client.update_highest_message_response_data)
+        print("json:", pushover_client.update_highest_message_response.json)
+        print("text:", pushover_client.update_highest_message_response.text)
+        print("status code:", pushover_client.update_highest_message_response.status_code)
+        errors = pushover_client.update_highest_message_data["errors"]
+        print_data_errors(errors=errors)
         exit(4)
 
     pushover_client.download_messages()
@@ -487,7 +488,6 @@ def dummy_delete_all_messages():
     print("messages_before:", messages_before)
     print("messages_after:", messages_after)
     return messages_after
-
 number_of_messages_after_deletion = dummy_delete_all_messages()
 
 print("Connecting to the websocket server..")
