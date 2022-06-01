@@ -82,6 +82,8 @@ class PushoverOpenClient:
     def login(self, rewrite_creds_file=True):
         """
         Logs in with email and password, achieving a `secret` from the API.
+
+        As specified in https://pushover.net/api/client#login
         """
 
         login_payload = self._get_login_payload()
@@ -122,7 +124,11 @@ class PushoverOpenClient:
 
     def register_device(self, device_name=NEW_DEVICE_NAME,
                         rewrite_creds_file=True):
-        """Registers a new client device on the Pushover account."""
+        """
+        Registers a new client device on the Pushover account.
+
+        As specified in https://pushover.net/api/client#register
+        """
 
         device_registration_payload = \
             self._get_device_registration_payload(device_name=device_name)
@@ -146,7 +152,11 @@ class PushoverOpenClient:
         return self.device_id
 
     def download_messages(self):
-        """Downloads all messages currently on this device."""
+        """
+        Downloads all messages currently on this device.
+
+        As specified in https://pushover.net/api/client#download
+        """
 
         message_downloading_params = self._get_message_downloading_params()
         message_downloading_response =\
@@ -175,6 +185,8 @@ class PushoverOpenClient:
         """
         Deletes all messages for this device. If not deleted, tey keep
         being downloaded again.
+        
+        As specified in https://pushover.net/api/client#delete
         """
 
         if not last_message_id:
@@ -363,8 +375,8 @@ messages_after = len(pushover_client.messages)
 print("messages_before:", messages_before)
 print("messages_after:", messages_after)
 
-
 print("Connecting to the websockets server..")
+# As specified in https://pushover.net/api/client#websocket
 
 # "login:{device_id}:{secret}\n"
 websockets_login_string = pushover_client.get_websockets_login_string()
@@ -373,6 +385,20 @@ def on_open(wsapp):
     wsapp.send(websockets_login_string)
 
 def on_message(wsapp, message):
+
+    # Pushover websockets server messages can be the following:
+    #
+    # b'#' - Keep-alive packet, no response needed.
+    # b'!' - A new message has arrived; you should perform a sync.
+    # b'R' - Reload request; you should drop your connection and re-connect.
+    # b'E' - Error; a permanent problem occured and you should not
+    #        automatically re-connect. Prompt the user to login again or
+    #        re-enable the device.
+    # b'A' - Error; the device logged in from another session and this session
+    #        is being closed. Do not automatically re-connect.
+    #
+    # As specified in https://pushover.net/api/client#websocket
+
     print(message)
 
 #websocket.enableTrace(True)
