@@ -1,5 +1,8 @@
 #!/usr/bin/env python
 
+# Pushover Open Client API
+# specification: https://pushover.net/api/client
+
 import datetime
 import json
 import os
@@ -18,7 +21,7 @@ ENDPOINT_UPDATE_HIGHEST_MESSAGE = \
 WEBSOCKETS_SERVER_URL = "wss://client.pushover.net/push"
 WEBSOCKETS_LOGIN = "login:{device_id}:{secret}\n"
 
-CREDENTIALS_FILENAME = os.path.expanduser("~/.pushover-client-creds.json")
+CREDENTIALS_FILENAME = os.path.expanduser("~/.pushover-open-client-creds.json")
 
 now = datetime.datetime.now()
 CURRENT_TIME = now.strftime("%Y%m%d_%H%M%S")
