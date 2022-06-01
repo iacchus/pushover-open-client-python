@@ -152,13 +152,14 @@ class PushoverOpenClient:
         if not secret:
             secret = self.secret
 
-        device_registration_payload = \
+        device_registration_payload =\
             self._get_device_registration_payload(device_name=device_name,
                                                   secret=secret)
-        device_registration_response = \
+        device_registration_response =\
             requests.post(ENDPOINT_DEVICES, data=device_registration_payload)
 
-        device_registration_dict = json.loads(device_registration_response.text)
+        device_registration_dict =\
+            json.loads(device_registration_response.text)
 
         self.device_registration_response = device_registration_response
         self.device_registration_data = device_registration_dict
@@ -398,6 +399,7 @@ def dummy_message_downloading():
     return messages
 
 messages = dummy_message_downloading()
+number_of_messages_after_deletion = len(pushover_client.messages)
 
 def dummy_delete_all_messages():
     print("Let's delete all messages now?")
