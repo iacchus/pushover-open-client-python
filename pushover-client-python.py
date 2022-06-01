@@ -57,15 +57,20 @@ class PushoverOpenClient:
 
     login_response = None  # requests.Response
     login_response_data = dict()
+    login_errors = None # TODO: implement me!!
 
     device_registration_response = None  # requests.Response
     device_registration_data = dict()
+    device_registration_errors = None # TODO: implement me!!
+
 
     message_downloading_response = None  # requests.Response
     message_downloading_data = dict()
+    message_downloading_errors = None  # TODO: IMPLEMENT ME!!!
 
     update_highest_message_response = None  # requests.Response
     update_highest_message_data = dict()
+    update_highest_message_errors = None  # TODO: IMPLEMENT ME!!!
 
     def __init__(self):
         #self.load_from_credentials_file()
@@ -107,11 +112,11 @@ class PushoverOpenClient:
         login_response_dict = json.loads(login_response.text)
 
         self.login_response = login_response
-        self.login_data = login_response_dict
+        self.login_response_data = login_response_dict
 
-        # If this method fails and `self.needs_twofa` is True, the implementor
-        # should ask the user for the 2-factor auth code, set it in
-        # `self.twofa`, and run this method again.
+        # If this `self.login()` method fails and `self.needs_twofa` is True,
+        # the implementor should ask the user for the 2-factor auth code,
+        # set it in `self.twofa`, and run this method again.
         if login_response.status_code == 412:
             self.needs_twofa = True
             return None
@@ -129,7 +134,6 @@ class PushoverOpenClient:
 
         return self.secret
 
-    def set_twofa(self, twofa):
         """
         Sets the code for two-factor authentication,
         if the user has it enabled. After this, `self.login()` should be
@@ -138,15 +142,19 @@ class PushoverOpenClient:
         self.twofa = twofa
 
     def register_device(self, device_name=NEW_DEVICE_NAME,
-                        rewrite_creds_file=True):
+                        secret=None, rewrite_creds_file=True):
         """
         Registers a new client device on the Pushover account.
 
         As specified in https://pushover.net/api/client#register
         """
 
+        if not secret:
+            secret = self.secret
+
         device_registration_payload = \
-            self._get_device_registration_payload(device_name=device_name)
+            self._get_device_registration_payload(device_name=device_name,
+                                                  secret=secret)
         device_registration_response = \
             requests.post(ENDPOINT_DEVICES, data=device_registration_payload)
 
@@ -195,7 +203,6 @@ class PushoverOpenClient:
 
         return messages
 
-    #def update_highest_message(self, last_message_id=None):
     def delete_all_messages(self, last_message_id=None):
         """
         Deletes all messages for this device. If not deleted, tey keep
@@ -211,7 +218,7 @@ class PushoverOpenClient:
             self._get_delete_messages_payload(last_message_id=last_message_id)
 
         update_highest_message_endpoint =\
-            ENDPOINT_UPDATE_HIGHEST_MESSAGE.format(api_url=API_URL,
+            ENDPOINT_UPDATE_HIGHEST_MESSAGE.format(api_url=PUSHOVER_API_URL,
                                                    device_id=self.device_id)
 
         update_highest_message_response =\
@@ -264,6 +271,7 @@ class PushoverOpenClient:
             .format(device_id=self.device_id, secret=self.secret)
         return websocket_login_string
 
+    def set_twofa(self, twofa):
 
     def _get_delete_messages_payload(self, last_message_id=None):
 
@@ -299,12 +307,12 @@ class PushoverOpenClient:
 
         return login_payload
 
-    def _get_device_registration_payload(self, device_name=NEW_DEVICE_NAME):
+    def _get_device_registration_payload(self, device_name, secret):
 
         device_registration_payload = {
             "name": device_name,
             "os": "O",
-            "secret": self.secret
+            "secret": secret
         }
 
         return device_registration_payload
@@ -319,76 +327,99 @@ class PushoverOpenClient:
         return message_downloading_params
 
 
-    # def _write_credentials_file(self, file_path=CREDENTIALS_FILENAME):
-    #     credentials = self._get_credentials_dict()
-    #
-    #     with open(file_path, "w") as credentials_file:
-    #         json.dump(credentials, credentials_file)
-
 pushover_client = PushoverOpenClient().load_from_credentials_file()
-#pushover_client = PushoverOpenClient().load_from_credentials_file()
 
-print("Logging in...")
-# Please, improve this :)
-while True:
-    secret = pushover_client.login()
+def dummy_login():
 
-    if secret:
-        break
+    print("Logging in...")
+    # Please, improve this :)
+    while True:
+        secret = pushover_client.login()
 
-    elif not secret and pushover_client.needs_twofa:
-        pushover_client.twofa = input("Your account is set up to using "
-                                      "two-factor authentication; Please "
-                                      "enter your code: ")
-        continue
+        if secret:
+            break
 
-    elif not secret and not pushover_client.needs_twofa:
-        print("Error authenticating. Please check your account's credentials",
-              pushover_client.login_response_data)
-        exit(1)
+        elif not secret and pushover_client.needs_twofa:
+            pushover_client.twofa = input("Your account is set up to using "
+                                          "two-factor authentication; Please "
+                                          "enter your code: ")
+            continue
 
-print("Login ok. secret:", secret)
+        elif not secret and not pushover_client.needs_twofa:
+            print("Error authenticating. Please check your account's credentials",
+                  pushover_client.login_response_data)
+            print("json:", pushover_client.login_response.json)
+            print("text:", pushover_client.login_response.text)
+            print("status code:", pushover_client.login_response.status_code)
+            for error in pushover_client.login_response_data["errors"]:
+                print("ERROR", error)
+            exit(1)
 
-print("Registering new device...")
+    print("Login ok. secret:", secret)
 
-device_id = pushover_client.register_device()
+    return secret
 
-if not device_id:
-    print("Error registering device.",
-          pushover_client.device_registration_data)
-    exit(2)
+secret = dummy_login()
 
-print("Device registered. device_id:", device_id)
+def dummy_register_device():
+    print("Registering new device...")
 
-print("Downloading messages...")
+    device_id = pushover_client.register_device()
 
-pushover_client.messages.clear()
-messages = pushover_client.download_messages()
+    if not device_id:
+        print("Error registering device.",
+              pushover_client.device_registration_data)
+        print("json:", pushover_client.device_registration_response.json)
+        print("text:", pushover_client.device_registration_response.text)
+        print("status code:", pushover_client.device_registration_response.status_code)
+        for error in pushover_client.device_registration_response_data["errors"]:
+            print("ERROR", error)
+        exit(2)
 
-if not messages:
-    print("Error downloading messages.",
-          pushover_client.message_downloading_data)
-    exit(3)
+    print("Device registered. device_id:", device_id)
 
-print("Messages were downloaded. Here they are:", messages)
+    return device_id
 
-print("Let's delete all messages now?")
+device_id = dummy_register_device()
 
-messages_before = len(pushover_client.messages)
+def dummy_message_downloading():
+    print("Downloading messages...")
 
-is_success = pushover_client.delete_all_messages()
-pushover_client.messages.clear()
+    pushover_client.messages.clear()
+    messages = pushover_client.download_messages()
 
-if not is_success:
-    print("Error deleting old messages.",
-          pushover_client.update_highest_message_data)
-    exit(4)
+    if not messages:
+        print("Error downloading messages.",
+              pushover_client.message_downloading_data)
+        exit(3)
 
-pushover_client.download_messages()
-messages_after = len(pushover_client.messages)
+    print("Messages were downloaded. Here they are:", messages)
 
-print("messages_before:", messages_before)
-print("messages_after:", messages_after)
+    return messages
+
+messages = dummy_message_downloading()
+
+def dummy_delete_all_messages():
+    print("Let's delete all messages now?")
+
+    messages_before = len(pushover_client.messages)
+
+    is_success = pushover_client.delete_all_messages()
+    pushover_client.messages.clear()
+
+    if not is_success:
+        print("Error deleting old messages.",
+              pushover_client.update_highest_message_data)
+        exit(4)
+
+    pushover_client.download_messages()
+    messages_after = len(pushover_client.messages)
+
+    print("messages_before:", messages_before)
+    print("messages_after:", messages_after)
+    return messages_after
+
+number_of_messages_after_deletion = dummy_delete_all_messages()
 
 print("Connecting to the websocket server..")
 # As specified in https://pushover.net/api/client#websocket
@@ -465,31 +496,3 @@ class PushoverOpenClientRealTime:
     def _on_close(self, websocketapp, close_status_code, close_msg):
         pass
 
-# "login:{device_id}:{secret}\n"
-# websocket_login_string = pushover_client.get_websocket_login_string()
-
-# def on_open(wsapp):
-#     wsapp.send(websocket_login_string)
-#
-# def on_message(wsapp, message):
-#
-#     # Pushover websocket server messages can be the following:
-#     #
-#     # b'#' - Keep-alive packet, no response needed.
-#     # b'!' - A new message has arrived; you should perform a sync.
-#     # b'R' - Reload request; you should drop your connection and re-connect.
-#     # b'E' - Error; a permanent problem occured and you should not
-#     #        automatically re-connect. Prompt the user to login again or
-#     #        re-enable the device.
-#     # b'A' - Error; the device logged in from another session and this session
-#     #        is being closed. Do not automatically re-connect.
-#     #
-#     # As specified in https://pushover.net/api/client#websocket
-#
-#     print(message)
-#
-#
-# #websocket.enableTrace(True)
-# wsapp = websocket.WebSocketApp(WEBSOCKET_SERVER_URL, on_open=on_open,
-#                                on_message=on_message)
-# wsapp.run_forever()
