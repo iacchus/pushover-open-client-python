@@ -398,10 +398,14 @@ print("Connecting to the websocket server..")
 
 class PushoverOpenClientRealTime:
 
+    pushover_websocket_server_commands = dict()
+
     def __init__(self, pushover_open_client, pushover_websocket_server_url=\
                  PUSHOVER_WEBSOCKET_SERVER_URL):
 
-        self.pushover_websocket_server_commands_dict =
+        self.pushover_open_client = pushover_open_client
+
+        self.pushover_websocket_server_commands =\
         {
             b'#': self.message_keep_alive,
             b'!': self.message_do_sync,
@@ -409,17 +413,47 @@ class PushoverOpenClientRealTime:
             b'E': self.message_error_permanent,
             b'A': self.message_error
         }
+
+        self.pushover_websocket_login_string = \
+            pushover_client.get_websocket_login_string()
+
         self.websocketapp = \
             websocket.WebSocketApp(pushover_websocket_server_url,
-                                   on_open=self.on_open,
-                                   on_message=self.on_message,
-                                   on_error=self.on_error,
-                                   on_close=self.on_close)
+                                   on_open=self._on_open,
+                                   on_message=self._on_message,
+                                   on_error=self._on_error,
+                                   on_close=self._on_close)
 
-    def on_open(self, websocketapp):
-        self.websocketapp.send(websocket_login_string)
+    def message_keep_alive(self):
+        pass
 
-    def on_message(self, websocketapp, message):
+    def message_do_sync(self):
+        pass
+
+    def message_reload_request(self):
+        pass
+
+    def message_error_permanent(self):
+        pass
+
+    def message_error(self):
+        pass
+
+    def send_login(self, pushover_websocket_connection,
+                   pushover_websocket_login_string):
+        pushover_websocket_connection.send(websocket_login_string)
+
+    def run_forever(self):
+        self.websocketapp.run_forever()
+
+    def _on_open(self, websocketapp):
+        pushover_websocket_login_string = self.pushover_websocket_login_string
+
+        self.send_login(pushover_websocket_connection=websocketapp,
+                        pushover_websocket_login_string=\
+                            pushover_websocket_login_string)
+
+    def _on_message(self, websocketapp, message):
         # This means a websocket message by the Pushover Websockets server;
         # Pushover websocket server messages can be the following:
         #
@@ -434,18 +468,16 @@ class PushoverOpenClientRealTime:
         #       session is being closed. Do not automatically re-connect.
         #
         # As specified in https://pushover.net/api/client#websocket
-        if message in
+        if message in self.pushover_websocket_server_commands:
+            self.pushover_websocket_server_commands[message]()
 
         print(message)
 
-    def on_error(self, websocketapp, exception):
+    def _on_error(self, websocketapp, exception):
         pass
 
-    def on_close(self, websocketapp, close_status_code, close_msg):
+    def _on_close(self, websocketapp, close_status_code, close_msg):
         pass
-
-    def run_forever(self):
-        self.websocketapp.run_forever()
 
 # "login:{device_id}:{secret}\n"
 # websocket_login_string = pushover_client.get_websocket_login_string()
