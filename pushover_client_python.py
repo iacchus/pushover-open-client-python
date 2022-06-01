@@ -24,13 +24,6 @@ PUSHOVER_WEBSOCKET_LOGIN = "login:{device_id}:{secret}\n"
 
 CREDENTIALS_FILENAME = os.path.expanduser("~/.pushover-open-client-creds.json")
 
-now = datetime.datetime.now()
-CURRENT_TIME = now.strftime("%Y%m%d_%H%M%S")
-# device name is up to 25 chars, [A-Za-z0-9_-]
-# TODO: make a function or method of this NEW_DEVICE_NAME; generate it at
-# TODO: request
-NEW_DEVICE_NAME = "python-{current_time}".format(current_time=CURRENT_TIME)
-
 PUSHOVER_WEBSOCKET_SERVER_MESSAGES_MEANING = {
     b'#': "Keep-alive packet, no response needed.",
     b'!': "A new message has arrived; you should perform a sync.",
@@ -44,6 +37,15 @@ PUSHOVER_WEBSOCKET_SERVER_MESSAGES_MEANING = {
 
 COMMAND_FUNCTIONS_REGISTRY = {}
 PARSING_FUNCTIONS_REGISTRY = {}
+
+def generate_new_device_name():
+    # device name is up to 25 chars, [A-Za-z0-9_-]
+
+    now = datetime.datetime.now()
+    current_time = now.strftime("%Y%m%d_%H%M%S")
+    new_device_name = "python-{current_time}".format(current_time=current_time)
+
+    return new_device_name
 
 def print_data_errors(errors):
     # errors can be a list or a dict
@@ -89,20 +91,20 @@ class PushoverOpenClient:
 
     login_response = None  # requests.Response
     login_response_data = dict()
-    login_errors = None # TODO: implement me!!
+    login_errors = None
 
     device_registration_response = None  # requests.Response
     device_registration_response_data = dict()
-    device_registration_errors = None # TODO: implement me!!
+    device_registration_errors = None
 
 
     message_downloading_response = None  # requests.Response
     message_downloading_response_data = dict()
-    message_downloading_errors = None  # TODO: IMPLEMENT ME!!!
+    message_downloading_errors = None
 
     update_highest_message_response = None  # requests.Response
     update_highest_message_response_data = dict()
-    update_highest_message_errors = None  # TODO: IMPLEMENT ME!!!
+    update_highest_message_errors = None
 
     def __init__(self):
         #self.load_from_credentials_file()
@@ -185,6 +187,7 @@ class PushoverOpenClient:
 
         return self.secret
 
+    def set_twofa(self, twofa):
         """
         Sets the code for two-factor authentication,
         if the user has it enabled. After this, `self.login()` should be
@@ -192,13 +195,16 @@ class PushoverOpenClient:
         """
         self.twofa = twofa
 
-    def register_device(self, device_name=NEW_DEVICE_NAME,
+    def register_device(self, device_name=None,
                         secret=None, rewrite_creds_file=True):
         """
         Registers a new client device on the Pushover account.
 
         As specified in https://pushover.net/api/client#register
         """
+
+        if not device_name:
+            device_name = generate_new_device_name()
 
         if not secret:
             secret = self.secret
