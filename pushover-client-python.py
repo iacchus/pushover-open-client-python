@@ -121,6 +121,10 @@ class PushoverOpenClient:
             if twofa: twofa = twofa
             elif self.needs_twofa: twofa = self.twofa
 
+        self.login_response = None
+        self.login_response_data = None
+        self.login_errors = None
+
         login_payload = self._get_login_payload(email=email, password=password,
                                                 twofa=twofa)
 
@@ -140,6 +144,7 @@ class PushoverOpenClient:
             self.needs_twofa = False
 
         if not login_response_dict["status"] == 1:
+            self.login_errors = login_response_dict["errors"]
             return None
 
         # else...
@@ -168,6 +173,10 @@ class PushoverOpenClient:
         if not secret:
             secret = self.secret
 
+        self.device_registration_response = None
+        self.device_registration_response_data = None
+        self.device_registration_errors = None
+
         device_registration_payload =\
             self._get_device_registration_payload(device_name=device_name,
                                                   secret=secret)
@@ -182,6 +191,8 @@ class PushoverOpenClient:
                  device_registration_response_dict
 
         if not device_registration_response_dict["status"] == 1:
+            self.device_registration_errors =\
+                device_registration_response_dict["errors"]
             return None
 
         # else...
@@ -205,6 +216,10 @@ class PushoverOpenClient:
         if not device_id:
             device_id = self.device_id
 
+        self.message_downloading_response = None
+        self.message_downloading_response_data = None
+        self.message_downloading_errors = None
+
         message_downloading_params =\
             self._get_message_downloading_params(secret=secret,
                                                  device_id=device_id)
@@ -218,6 +233,8 @@ class PushoverOpenClient:
         self.message_downloading_response_data = message_downloading_dict
 
         if not message_downloading_dict["status"] == 1:
+            self.message_downloading_errors =\
+                message_downloading_dict["errors"]
             return False
 
         messages = message_downloading_dict["messages"]
