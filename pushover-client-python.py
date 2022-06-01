@@ -393,15 +393,30 @@ print("messages_after:", messages_after)
 print("Connecting to the websocket server..")
 # As specified in https://pushover.net/api/client#websocket
 
-class PushoverOpenClientWebsockets:
+# websocket-client documentation:
+# https://websocket-client.readthedocs.io/en/latest/app.html
+
+class PushoverOpenClientRealTime:
 
     def __init__(self, pushover_open_client, pushover_websocket_server_url=\
                  PUSHOVER_WEBSOCKET_SERVER_URL):
+
+        self.pushover_websocket_server_commands_dict =
+        {
+            b'#': self.message_keep_alive,
+            b'!': self.message_do_sync,
+            b'R': self.message_reload_request,
+            b'E': self.message_error_permanent,
+            b'A': self.message_error
+        }
         self.websocketapp = \
             websocket.WebSocketApp(pushover_websocket_server_url,
-                                   on_open=on_open, on_message=on_message)
+                                   on_open=self.on_open,
+                                   on_message=self.on_message,
+                                   on_error=self.on_error,
+                                   on_close=self.on_close)
 
-    def on_open(self, wsapp):
+    def on_open(self, websocketapp):
         self.websocketapp.send(websocket_login_string)
 
     def on_message(self, websocketapp, message):
@@ -410,14 +425,16 @@ class PushoverOpenClientWebsockets:
         #
         # b'#' - Keep-alive packet, no response needed.
         # b'!' - A new message has arrived; you should perform a sync.
-        # b'R' - Reload request; you should drop your connection and re-connect.
+        # b'R' - Reload request; you should drop your connection and
+        #        re-connect.
         # b'E' - Error; a permanent problem occured and you should not
         #        automatically re-connect. Prompt the user to login again or
         #        re-enable the device.
-        # b'A' - Error; the device logged in from another session and this session
-        #        is being closed. Do not automatically re-connect.
+        # b'A' - Error; the device logged in from another session and this
+        #       session is being closed. Do not automatically re-connect.
         #
         # As specified in https://pushover.net/api/client#websocket
+        if message in
 
         print(message)
 
