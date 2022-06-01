@@ -27,6 +27,8 @@ CREDENTIALS_FILENAME = os.path.expanduser("~/.pushover-open-client-creds.json")
 now = datetime.datetime.now()
 CURRENT_TIME = now.strftime("%Y%m%d_%H%M%S")
 # device name is up to 25 chars, [A-Za-z0-9_-]
+# TODO: make a function or method of this NEW_DEVICE_NAME; generate it at
+# TODO: request
 NEW_DEVICE_NAME = "python-{current_time}".format(current_time=CURRENT_TIME)
 
 PUSHOVER_WEBSOCKET_SERVER_MESSAGES_MEANING = {
@@ -60,7 +62,7 @@ class PushoverOpenClient:
     login_errors = None # TODO: implement me!!
 
     device_registration_response = None  # requests.Response
-    device_registration_data = dict()
+    device_registration_response_data = dict()
     device_registration_errors = None # TODO: implement me!!
 
 
@@ -158,17 +160,18 @@ class PushoverOpenClient:
         device_registration_response =\
             requests.post(ENDPOINT_DEVICES, data=device_registration_payload)
 
-        device_registration_dict =\
+        device_registration_response_dict =\
             json.loads(device_registration_response.text)
 
         self.device_registration_response = device_registration_response
-        self.device_registration_data = device_registration_dict
+        self.device_registration_response_data =\
+                 device_registration_response_dict
 
-        if not device_registration_dict["status"] == 1:
+        if not device_registration_response_dict["status"] == 1:
             return None
 
         # else...
-        self.device_id = device_registration_dict["id"]
+        self.device_id = device_registration_response_dict["id"]
 
         if rewrite_creds_file:
             self.write_credentials_file()
@@ -273,6 +276,7 @@ class PushoverOpenClient:
         return websocket_login_string
 
     def set_twofa(self, twofa):
+        self.twofa = twofa
 
     def _get_delete_messages_payload(self, last_message_id=None):
 
@@ -365,7 +369,7 @@ secret = dummy_login()
 def dummy_register_device():
     print("Registering new device...")
 
-    device_id = pushover_client.register_device()
+    device_id = pushover_client.register_device(device_name="ppppppppppppppppppppppppppppppppppppppppppppppppppppppp")
 
     if not device_id:
         print("Error registering device.",
