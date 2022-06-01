@@ -264,6 +264,10 @@ class PushoverOpenClient:
         if not last_message_id:
             last_message_id = self.get_highest_message_id(redownload=False)
 
+        self.update_highest_message_response = None
+        self.update_highest_message_response_data = None
+        self.update_highest_message_errors = None
+
         delete_messages_payload =\
             self._get_delete_messages_payload(secret=secret,
                                               message=last_message_id)
@@ -283,6 +287,8 @@ class PushoverOpenClient:
         self.update_highest_message_data = update_highest_message_dict
 
         if not update_highest_message_dict["status"] == 1:
+            self.update_highest_message_errors =\
+                update_highest_message_dict["errors"]
             return False
 
         # else...
