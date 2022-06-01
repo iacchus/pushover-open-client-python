@@ -192,14 +192,22 @@ class PushoverOpenClient:
 
         return self.device_id
 
-    def download_messages(self):
+    def download_messages(self, secret=None, device_id=None):
         """
         Downloads all messages currently on this device.
 
         As specified in https://pushover.net/api/client#download
         """
 
-        message_downloading_params = self._get_message_downloading_params()
+        if not secret:
+            secret = self.secret
+
+        if not device_id:
+            device_id = self.device_id
+
+        message_downloading_params =\
+            self._get_message_downloading_params(secret=secret,
+                                                 device_id=device_id)
         message_downloading_response =\
             requests.get(ENDPOINT_MESSAGES, params=message_downloading_params)
 
@@ -292,18 +300,6 @@ class PushoverOpenClient:
     def set_twofa(self, twofa):
         self.twofa = twofa
 
-    def _get_delete_messages_payload(self, last_message_id=None):
-
-        if not last_message_id:
-            last_message_id = self.get_highest_message_id()
-
-        delete_messages_payload = {
-            "message": last_message_id,
-            "secret": self.secret
-        }
-
-        return delete_messages_payload
-
     def _get_credentials_dict(self):
         credentials_dict = dict()
 
@@ -336,27 +332,38 @@ class PushoverOpenClient:
 
         return device_registration_payload
 
-    def _get_message_downloading_params(self):
+    def _get_message_downloading_params(self, secret, device_id):
 
+    print("DEVICE_ID IS", device_id)
         message_downloading_params = {
-            "secret": self.secret,
-            "device_id": self.device_id
+            "secret": secret,
+            "device_id": device_id
         }
 
         return message_downloading_params
 
+    def _get_delete_messages_payload(self, last_message_id=None):
+
+        if not last_message_id:
+            last_message_id = self.get_highest_message_id()
+
+        delete_messages_payload = {
+            "message": last_message_id,
+            "secret": self.secret
+        }
+
+        return delete_messages_payload
 
 def print_data_errors(errors):
     # errors can be a list or a dict
-    for error in errors.values():
-        if isinstance(errors, list):
-            print("ERROR:", error)
-        elif isinstance(errors, dict):
-            for key, value_list in errors.items():
-                for value in value_list:
-                    print("ERROR:", key, "-", value)
-        else:  # this doesn't ever happen, only list or dict, but I'm unsure.
-            print("ERROR:", error)
+    if isinstance(errors, list):
+        for error in errors: print(error)
+    elif isinstance(errors, dict):
+        for key, error_list in errors.items():
+            for error in error_list:
+                print("ERROR:", key, "-", error)
+    else:  # this doesn't ever happen, only list or dict, but I'm unsure.
+        print("ERROR:", errors)
 
 pushover_client = PushoverOpenClient().load_from_credentials_file()
 
@@ -418,11 +425,13 @@ def dummy_message_downloading():
     print("Downloading messages...")
 
     pushover_client.messages.clear()
-    messages = pushover_client.download_messages()
+    messages = pushover_client.download_messages(device_id="bruh")
 
     if not messages:
         print("Error downloading messages.",
               pushover_client.message_downloading_data)
+        errors = pushover_client.message_downloading_data["errors"]
+        print_data_errors(errors)
         exit(3)
 
     print("Messages were downloaded. Here they are:", messages)
