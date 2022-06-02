@@ -1,3 +1,8 @@
+# THIS REPOSITORY IS *DEPRECATED*, THIS PROJECT IS NOW HOSTED AT https://github.com/iacchus/python-pushover-open-client
+
+New repository:
+https://github.com/iacchus/python-pushover-open-client
+
 # pushover-open-client-python
 
 This is a client and framework implementation of 
